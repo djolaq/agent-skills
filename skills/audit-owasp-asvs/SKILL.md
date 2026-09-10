@@ -8,6 +8,11 @@ description: >-
   code review", "ASVS compliance check", or wants findings classified by severity with
   remediation priorities. Triggers: asvs, audit, security, vuln, vulnerability, appsec,
   pentest report, compliance, securite.
+compatibility: opencode, claude
+metadata:
+  read-only: "true"
+  parallel-mode: "true"
+  asvs-version: "5.0.0"
 ---
 
 # OWASP ASVS Security Audit
@@ -146,7 +151,53 @@ Use `templates/asvs-audit-report.md`. Required sections:
 | V16 Security Logging & Error Handling | Security events logged (success/failure of auth/authz, input validation failures); log content doesn't include secrets/passwords; logs protected against injection/tampering; generic error messages to users, detailed internal logging. |
 | V17 WebRTC | TURN config security; media permission handling; signaling authentication/origin checks. |
 
-## 5. Remediation guidance in the report
+## 5. Parallel audit mode (multiple agents)
+
+For large codebases or full L2/L3 audits, split the work across **multiple read-only
+agents** that audit different ASVS chapters in parallel and report back to one
+**coordinator** agent, which produces the single final report.
+
+When to use: repo is large, many chapters are in scope, or the user explicitly asks to
+"run the audit in parallel" / "split across agents". For small projects or L1-only,
+Parallel mode is optional; single-agent remains the default.
+
+### Coordinator contract
+1. **Acquire the code once.** If the project is already local, use it. If it only lives
+   on GitHub or another remote, clone it **once into a fresh local directory or git
+   worktree** (executed by the coordinator; the only network/write operation in the whole
+   audit). Record the clone location and the commit/branch SHA audited. Servers must not
+   be probed by workers.
+2. **Split chapters.** Group the scoped ASVS chapters (see `references/parallel-audit.md`
+   for a balanced default split). Aim for roughly equal requirement counts per worker;
+   heavy chapters (V6 Authentication, V10 OAuth and OIDC) can stand alone; very small
+   chapters (V9) can be joined with adjacent ones. L1-only: 2-4 workers suffices.
+3. **Dispatch one worker per group**, each with this identical contract:
+   - Scope: exact chapter IDs, audit level(s), and the repo path (the shared clone).
+   - Rules: apply the same non-destructive rules (section 1) - read-only, no execution,
+     no network, no writes, no secrets in output.
+   - Method: Phase 1-4 of the workflow scoped to the assigned chapters.
+   - Deliverable: return in the final message the findings for the assigned chapters in a
+     structured form: per finding `v5.0.0-Vx.y.z`, chapter, title, verdict,
+     evidence `path:line`, impact, P0-P3 priority, and a "How to remediate" line. Plus the
+     per-chapter PASS/FAIL/PARTIAL/N/A/not-verifiable counts.
+4. **Merge and produce the report.** Combine worker results: deduplicate overlapping
+   findings (e.g. the same flag reported by two chapter agents), normalize priorities,
+   fill `templates/asvs-audit-report.md`, and write the single report file. Workers never
+   write files; only the coordinator writes the report (new path only).
+5. **Validate.** Ensure every cited `path:line` exists in the repo, every priority has a
+   rationale consistent with Phase 4, and no chapter of the chosen level is missing.
+
+### Worker guardrails (apply to every worker)
+- Re-read the hard rules of section 1; a worker that would modify, execute, or contact
+  the audited project must stop and report back instead.
+- Workers answer only their assigned chapters; do not duplicate other agents' scope.
+- Return findings even when a chapter is entirely `NOT-APPLICABLE` or `NOT-VERIFIABLE`
+  (state so explicitly with counts).
+
+Runtime-specific recipes to spawn workers (opencode vs Claude Code) are kept in
+`references/parallel-audit.md`; the recipes differ between agents, not the protocol.
+
+## 6. Remediation guidance in the report
 
 Every FAIL/PARTIAL finding must end with a concrete "How to remediate" paragraph that maps
 to the project's own stack (e.g. "switch parameterized queries in `src/db/`", "add
@@ -155,7 +206,7 @@ secrets in `docker-compose.yml` to the secrets manager Y", "add rate limiting mi
 `src/middleware/`"). Point at the exact file(s) that need changes so findings become
 trackable work items (issue/backlog).
 
-## 6. Limitations and honesty
+## 7. Limitations and honesty
 
 - This is a **static, at-rest review**; runtime behavior, live configuration, and external
   dependencies are not executed. Mark such requirements `NOT-VERIFIABLE` rather than
@@ -165,7 +216,9 @@ trackable work items (issue/backlog).
 - ASVS compliance is not an authorization of production readiness; state so in the report.
 - All findings must be traceable to files read during the audit. Never invent file paths.
 
-## 7. Skills resources
+## 8. Skills resources
 
 - `references/asvs-v5.0.0-requirements.md` - full requirement text for mapping/citing.
+- `references/parallel-audit.md` - runtime-specific recipes (opencode / Claude Code) to
+  run the parallel audit mode, plus a balanced chapter split.
 - `templates/asvs-audit-report.md` - the report skeleton to fill in.
