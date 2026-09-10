@@ -40,6 +40,9 @@ Ask the agent to audit a project, e.g.:
 - "Run an OWASP ASVS audit on this repo (Level 1) and write the report to `reports/`."
 - "Security audit of the auth module only, ASVS L2."
 - "ASVS compliance check - show the top risks in chat first."
+- "Run the audit in parallel across agents" - splits chapters across multiple read-only
+  worker agents and produces a single merged report (see
+  `skills/audit-owasp-asvs/references/parallel-audit.md`).
 
 The skill is **non-destructive by design**: it only reads and searches the codebase,
 never executes the application, never modifies files, and never contacts the audited
