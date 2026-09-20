@@ -9,6 +9,7 @@ coding agents. Each skill lives in its own directory and works with both
 | Skill | Description |
 |-------|-------------|
 | [audit-owasp-asvs](skills/audit-owasp-asvs) | Non-destructive security audit of a codebase against the official OWASP ASVS v5.0.0 standard; produces a severity-prioritized Markdown report for product owners and security engineers. |
+| [laravel-blue-team-review](skills/laravel-blue-team-review) | Defensive (blue team) review of Laravel PHP backends: detects unsafe/non-maintainable practices (SQL injection, mass assignment, N+1, missing authorization, committed secrets, unsupported framework versions) and produces a severity-ranked remediation report. |
 
 ## Installation
 
